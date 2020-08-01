@@ -10,11 +10,11 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 
 
-public class StreamUdpServer extends PduUtil implements Runnable {
+public class UdpServer extends PduUtil implements Runnable {
 
-    private static final String TAG = StreamUdpServer.class.getSimpleName();
+    private static final String TAG = UdpServer.class.getSimpleName();
 
-    private static final int BUFFER_SIZE = 5 * 1024 * 1024; //5MB
+    private static final int BUFFER_SIZE = 2 * 1024 * 1024; //2MB
 
     private volatile boolean isExit = false;
 
@@ -23,9 +23,11 @@ public class StreamUdpServer extends PduUtil implements Runnable {
     private DatagramSocket udpSocket;
     private int port;
 
+    private boolean isOpen = false;
+
     private ProcessHandler processHandler;  //子线程Handler
 
-    public StreamUdpServer(int port, StreamSinkCallback callback) {
+    public UdpServer(int port, StreamSinkCallback callback) {
         this.port = port;
         this.mCallback = callback;
 
@@ -41,25 +43,25 @@ public class StreamUdpServer extends PduUtil implements Runnable {
 
 
     /**
-     * 关闭tcp server
+     * 关闭 udp server
      */
     public void close() {
         isExit = true;
+        isOpen = false;
         udpSocket.close();
-
     }
 
+
+    public boolean isOpen() {
+        return isOpen;
+    }
 
     @Override
     public void run() {
         try {
             udpServerStart();
-        } catch (BindException e) {
-            Log.d(TAG, "UdpServer listen:" + e.toString());
-            if (mCallback != null) {
-                mCallback.onConnectState(ConnectState.CONNECT);
-            }
         } catch (Exception e) {
+            isOpen = false;
             e.printStackTrace();
             Log.e(TAG, "UdpServer listen:" + e.toString());
             if (mCallback != null) {
@@ -116,6 +118,7 @@ public class StreamUdpServer extends PduUtil implements Runnable {
     private void udpServerStart() throws Exception {
         udpSocket = new DatagramSocket(port);
         Log.d(TAG, "UdpServer bind to port:" + port);
+        isOpen = true;
 
         if (mCallback != null) {
             mCallback.onConnectState(ConnectState.CONNECT);
@@ -124,9 +127,9 @@ public class StreamUdpServer extends PduUtil implements Runnable {
         while (!isExit) {
             byte[] container = new byte[BUFFER_SIZE];
             DatagramPacket packet = new DatagramPacket(container, container.length);
-            // blocks until a packet is received
-            udpSocket.receive(packet);
-            byte[] buffer = packet.getData();
+
+            udpSocket.receive(packet);  // blocks until a packet is received
+            byte[] buffer = packet.getData();  //read buffer
 
             parsePdu(buffer);
         }

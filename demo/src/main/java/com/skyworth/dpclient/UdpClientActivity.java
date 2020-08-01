@@ -9,23 +9,22 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.skyworth.dpclientsdk.ConnectState;
 import com.skyworth.dpclientsdk.StreamSourceCallback;
-import com.skyworth.dpclientsdk.StreamUdpClient;
+import com.skyworth.dpclientsdk.UdpClient;
 
 
 public class UdpClientActivity extends AppCompatActivity implements View.OnClickListener {
+
     private static final String TAG = "client";
 
-    private StreamUdpClient udpClient;
+    private UdpClient udpClient;
     private EditText input;
+
+    private int count;
 
     private StreamSourceCallback callback = new StreamSourceCallback() {
         @Override
         public void onConnectState(ConnectState state) {
             Log.d(TAG, "StreamSourceState: " + state);
-            if (state == ConnectState.CONNECT) {
-
-            }
-
         }
     };
 
@@ -35,8 +34,8 @@ public class UdpClientActivity extends AppCompatActivity implements View.OnClick
         setContentView(R.layout.activity_udp_client);
 
         input = findViewById(R.id.editText);
-        //input.setText(DeviceUtil.getLocalIPAddress(this));
-        input.setText("192.168.0.103");
+        input.setText(DeviceUtil.getLocalIPAddress(this));
+        //input.setText("192.168.0.103");
 
         findViewById(R.id.btn_open).setOnClickListener(this);
         findViewById(R.id.btn_close).setOnClickListener(this);
@@ -50,9 +49,7 @@ public class UdpClientActivity extends AppCompatActivity implements View.OnClick
         switch (view.getId()) {
             case R.id.btn_open:
                 String ip = input.getText().toString();
-                //发送命令
-                //实力化一个命令发送端，参数为接受端的IP地址和端口号。这个会和发现服务（云端or局域网）对接，由发现服务提供
-                udpClient = new StreamUdpClient(ip, 39999, callback);
+                udpClient = new UdpClient(ip, UdpServerActivity.PORT, callback);
                 udpClient.open();
                 break;
             case R.id.btn_close:
@@ -69,7 +66,7 @@ public class UdpClientActivity extends AppCompatActivity implements View.OnClick
                 break;
             case R.id.btn_string:
                 if (udpClient != null) {
-                    String str = "我是一个小宝宝";
+                    String str = "我是一个小宝宝" + count++;
                     udpClient.sendData(str);
                 }
                 break;

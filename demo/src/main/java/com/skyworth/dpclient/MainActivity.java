@@ -13,7 +13,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_start);
+        setContentView(R.layout.activity_main);
+
         findViewById(R.id.btn_websocket).setOnClickListener(this);
         findViewById(R.id.btn_tcp).setOnClickListener(this);
         findViewById(R.id.btn_udp).setOnClickListener(this);

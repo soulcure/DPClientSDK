@@ -5,15 +5,13 @@ import android.media.MediaCodec;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
-import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.skyworth.dpclientsdk.ConnectState;
-import com.skyworth.dpclientsdk.StreamChannelSink;
 import com.skyworth.dpclientsdk.StreamSinkCallback;
-import com.skyworth.dpclientsdk.StreamUdpServer;
+import com.skyworth.dpclientsdk.UdpServer;
 
 import java.nio.ByteBuffer;
 
@@ -21,11 +19,13 @@ public class UdpServerActivity extends AppCompatActivity implements View.OnClick
 
     private static final String TAG = "server";
 
-    private StreamUdpServer udpServer;
+    public static final int PORT = 39999;
 
+    private UdpServer udpServer;
     private TextView tv_msg;
+    private TextView tv_ip;
 
-    StreamSinkCallback mCallback = new StreamSinkCallback() {
+    private StreamSinkCallback mCallback = new StreamSinkCallback() {
         @Override
         public void onData(byte[] data) {
             Log.d(TAG, "onData:" + data.length);
@@ -60,6 +60,9 @@ public class UdpServerActivity extends AppCompatActivity implements View.OnClick
         setContentView(R.layout.activity_udp_server);
 
         tv_msg = findViewById(R.id.tv_msg);
+        tv_ip = findViewById(R.id.tv_ip);
+        tv_ip.setText(DeviceUtil.getLocalIPAddress(this));
+
         findViewById(R.id.btn_open).setOnClickListener(this);
         findViewById(R.id.btn_close).setOnClickListener(this);
     }
@@ -78,7 +81,7 @@ public class UdpServerActivity extends AppCompatActivity implements View.OnClick
     public void onClick(View view) {
         switch (view.getId()) {
             case R.id.btn_open:
-                udpServer = new StreamUdpServer(39999, mCallback);
+                udpServer = new UdpServer(PORT, mCallback);
                 udpServer.open();
                 break;
             case R.id.btn_close:

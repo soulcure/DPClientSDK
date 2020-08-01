@@ -18,7 +18,7 @@ public class CommandResponseActivity extends AppCompatActivity implements View.O
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_main5);
 
         //命令接收回调
         callback1 = new RequestCallback() {
