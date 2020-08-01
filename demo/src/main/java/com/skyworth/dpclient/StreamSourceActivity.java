@@ -94,7 +94,6 @@ public class StreamSourceActivity extends AppCompatActivity implements View.OnCl
         public void handleMessage(Message msg) {
             switch (msg.what) {
                 case HANDLER_THREAD_SEND_DATA:
-                    runTest();
                     break;
                 default:
                     break;
@@ -104,54 +103,6 @@ public class StreamSourceActivity extends AppCompatActivity implements View.OnCl
 
     }
 
-    private void runTest() {
-
-        InputStream inputStream = StreamSourceActivity.this.getResources().openRawResource(R.raw.video_test);
-
-        try {
-            //ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buffer = new byte[(1460 - 8) * 10];
-            int n = 0;
-            while ((n = inputStream.read(buffer)) != -1) {
-                Log.e("lfzzz", "run:  length --- " + buffer.length);
-                test2.sendData(buffer);
-            }
-
-                /*byte[] b = new byte[]{9,9,9,9,9,9,9,9,9};
-                test2.sendData(b);*/
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        if (true) {
-            return;
-        }
-
-        byte[] bbb = new byte[2000 * 1024];
-        int frameIndex = 0;
-        try {
-            Thread.sleep(2000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        while (!mStop) {
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            for (int i = 0; i < 2000 * 1024; i++) {
-                bbb[i] = (byte) ((i + frameIndex) & 0xff);
-//                    bbb[i] =(byte)( i&0xff);
-            }
-            String aaa = "aaaaaa";
-            //byte [] bbb = aaa.getBytes();
-            Log.d("cuixiyuan", "send data...");
-            test2.sendData(bbb);
-            frameIndex++;
-        }
-    }
 
 
     @Override
