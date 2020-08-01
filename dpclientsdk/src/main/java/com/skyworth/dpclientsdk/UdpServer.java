@@ -3,7 +3,6 @@ package com.skyworth.dpclientsdk;
 import android.media.MediaCodec;
 import android.util.Log;
 
-import java.net.BindException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.nio.ByteBuffer;
@@ -16,14 +15,10 @@ public class UdpServer extends PduUtil implements Runnable {
 
     private static final int BUFFER_SIZE = 2 * 1024 * 1024; //2MB
 
-    private volatile boolean isExit = false;
-
     private StreamSinkCallback mCallback;
 
     private DatagramSocket udpSocket;
     private int port;
-
-    private boolean isOpen = false;
 
     private ProcessHandler processHandler;  //子线程Handler
 
@@ -46,14 +41,17 @@ public class UdpServer extends PduUtil implements Runnable {
      * 关闭 udp server
      */
     public void close() {
-        isExit = true;
-        isOpen = false;
-        udpSocket.close();
+        if (udpSocket != null) {
+            udpSocket.close();
+            udpSocket = null;
+        }
     }
 
-
+    /**
+     * 是否开启 udp server 绑定
+     */
     public boolean isOpen() {
-        return isOpen;
+        return udpSocket != null && udpSocket.isBound();
     }
 
     @Override
@@ -61,13 +59,14 @@ public class UdpServer extends PduUtil implements Runnable {
         try {
             udpServerStart();
         } catch (Exception e) {
-            isOpen = false;
             e.printStackTrace();
-            Log.e(TAG, "UdpServer listen:" + e.toString());
+            Log.e(TAG, "udpServer error----" + e.getMessage());
             if (mCallback != null) {
                 mCallback.onConnectState(ConnectState.ERROR);
             }
         }
+
+        Log.e(TAG, "udpServer exit---");
     }
 
 
@@ -85,15 +84,15 @@ public class UdpServer extends PduUtil implements Runnable {
                 public void run() {
                     if (pduBase.pduType == PDU_BYTES) {
                         byte[] cmd = pduBase.body;
-                        Log.d(TAG, "UdpServer local OnRec byte length:" + cmd);
+                        Log.d(TAG, "udpServer local OnRec byte length:" + cmd.length);
                         mCallback.onData(cmd);
                     } else if (pduBase.pduType == PDU_STRING) {
                         byte[] cmd = pduBase.body;
                         String msg = new String(cmd);
-                        Log.d(TAG, "UdpServer local OnRec String:" + msg);
+                        Log.d(TAG, "udpServer local OnRec String:" + msg);
                         mCallback.onData(msg);
                     } else if (pduBase.pduType == PDU_VIDEO) {
-                        Log.d(TAG, "UdpServer OnRec videoFrame size:" + pduBase.size);
+                        Log.d(TAG, "udpServer OnRec videoFrame size:" + pduBase.size);
                         MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
                         bufferInfo.set(pduBase.offset, pduBase.size, pduBase.presentationTimeUs, pduBase.flags);
 
@@ -101,7 +100,7 @@ public class UdpServer extends PduUtil implements Runnable {
                         mCallback.onVideoFrame(bufferInfo, byteBuffer);
 
                     } else if (pduBase.pduType == PDU_AUDIO) {
-                        Log.d(TAG, "UdpServer OnRec audioFrame size:" + pduBase.size);
+                        Log.d(TAG, "udpServer OnRec audioFrame size:" + pduBase.size);
                         MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
                         bufferInfo.set(pduBase.offset, pduBase.size, pduBase.presentationTimeUs, pduBase.flags);
 
@@ -117,14 +116,15 @@ public class UdpServer extends PduUtil implements Runnable {
 
     private void udpServerStart() throws Exception {
         udpSocket = new DatagramSocket(port);
-        Log.d(TAG, "UdpServer bind to port:" + port);
-        isOpen = true;
+        Log.d(TAG, "udpServer bind to port:" + port);
 
-        if (mCallback != null) {
-            mCallback.onConnectState(ConnectState.CONNECT);
+        if (udpSocket.isBound()) {
+            if (mCallback != null) {
+                mCallback.onConnectState(ConnectState.CONNECT);
+            }
         }
 
-        while (!isExit) {
+        while (udpSocket.isBound()) {
             byte[] container = new byte[BUFFER_SIZE];
             DatagramPacket packet = new DatagramPacket(container, container.length);
 

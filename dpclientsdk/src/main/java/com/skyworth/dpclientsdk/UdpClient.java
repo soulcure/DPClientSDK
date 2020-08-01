@@ -35,7 +35,7 @@ public class UdpClient extends PduUtil implements Runnable {
      */
 
     public UdpClient(String address, int port, StreamSourceCallback callback) {
-        Log.d(TAG, "Create UDP Client Task---");
+        Log.d(TAG, "Create udpClient Task---");
         this.mAddress = address;
         this.port = port;
         mStreamSourceCallback = callback;
@@ -51,8 +51,8 @@ public class UdpClient extends PduUtil implements Runnable {
     /**
      * 发送视频或音频帧
      *
-     * @param type   1 video frame ; 2 audio frame
-     * @param buffer
+     * @param type   0x02 video frame ; 0x03 audio frame
+     * @param buffer video frame ; audio frame
      * @return
      */
     public void sendData(byte type, MediaCodec.BufferInfo bufferInfo, ByteBuffer buffer) {
@@ -148,19 +148,50 @@ public class UdpClient extends PduUtil implements Runnable {
 
     @Override
     public void run() {
-        Log.d(TAG, "create DataSocketClientThread ");
+        Log.d(TAG, "run udpClient Thread---");
         try {
             socketConnect();
             udpReceive();
         } catch (Exception e) {
             e.printStackTrace();
-            Log.e(TAG, "socket failed on  " + mAddress + ":" + port + "  " + e.toString());
+            Log.e(TAG, "udpClient failed on  " + mAddress + ":" + port + "  " + e.getMessage());
             if (mStreamSourceCallback != null) {
                 mStreamSourceCallback.onConnectState(ConnectState.ERROR);
             }
         }
 
     }//#run
+
+
+    /**
+     * 连接socket
+     *
+     * @throws IOException
+     */
+    private void socketConnect() throws IOException {
+        InetAddress ipAddress = InetAddress.getByName(mAddress);
+
+        udpSocket = new DatagramSocket();
+        udpSocket.connect(ipAddress, port); //连接
+
+        if (udpSocket.isConnected()) {
+            Log.d(TAG, "connect udpClient success---");
+
+            mSender = new UdpSendThread();
+            mSender.start();
+
+            if (mStreamSourceCallback != null) {
+                mStreamSourceCallback.onConnectState(ConnectState.CONNECT);
+            }
+
+        } else {
+            Log.e(TAG, "connect udp socket failed on port :" + port);
+            if (mStreamSourceCallback != null) {
+                mStreamSourceCallback.onConnectState(ConnectState.ERROR);
+            }
+        }
+
+    }
 
 
     /**
@@ -183,42 +214,13 @@ public class UdpClient extends PduUtil implements Runnable {
 
 
     /**
-     * 连接socket
-     *
-     * @throws IOException
-     */
-    private void socketConnect() throws IOException {
-        InetAddress ipAddress = InetAddress.getByName(mAddress);
-
-        udpSocket = new DatagramSocket();
-        udpSocket.connect(ipAddress, port); //连接
-
-        if (udpSocket.isConnected()) {
-            Log.d(TAG, "connect udp socket success ");
-
-            mSender = new UdpSendThread();
-            mSender.start();
-
-            if (mStreamSourceCallback != null) {
-                mStreamSourceCallback.onConnectState(ConnectState.CONNECT);
-            }
-
-        } else {
-            Log.e(TAG, "connect udp socket failed on port :" + port);
-            if (mStreamSourceCallback != null) {
-                mStreamSourceCallback.onConnectState(ConnectState.ERROR);
-            }
-        }
-
-    }
-
-
-    /**
      * 关闭socket
      */
     public void close() {
-        udpSocket.close();
-        udpSocket = null;
+        if (udpSocket != null) {
+            udpSocket.close();
+            udpSocket = null;
+        }
         mSendQueue.clear();
     }
 
@@ -249,7 +251,6 @@ public class UdpClient extends PduUtil implements Runnable {
         public void send(ByteBuffer buffer) {
             synchronized (this) {
                 mSendQueue.offer(buffer);
-                notify();
             }
 
         }
