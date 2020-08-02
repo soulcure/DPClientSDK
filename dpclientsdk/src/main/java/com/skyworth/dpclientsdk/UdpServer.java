@@ -19,12 +19,14 @@ public class UdpServer extends PduUtil implements Runnable {
 
     private DatagramSocket udpSocket;
     private int port;
+    private ByteBuffer receiveBuffer;
 
     private ProcessHandler processHandler;  //子线程Handler
 
     public UdpServer(int port, StreamSinkCallback callback) {
         this.port = port;
         this.mCallback = callback;
+        receiveBuffer = ByteBuffer.allocate(BUFFER_SIZE);
 
         processHandler = new ProcessHandler("draw-surface", true);
     }
@@ -124,6 +126,8 @@ public class UdpServer extends PduUtil implements Runnable {
             }
         }
 
+        receiveBuffer.clear();
+
         while (udpSocket.isBound()) {
             byte[] container = new byte[BUFFER_SIZE];
             DatagramPacket packet = new DatagramPacket(container, container.length);
@@ -131,7 +135,13 @@ public class UdpServer extends PduUtil implements Runnable {
             udpSocket.receive(packet);  // blocks until a packet is received
             byte[] buffer = packet.getData();  //read buffer
 
-            parsePdu(buffer);
+            int length = packet.getLength();
+            receiveBuffer.put(buffer, 0, length);
+
+            receiveBuffer.flip();
+            while (parsePdu(receiveBuffer) > 0) {
+                Log.v(TAG, "read while loop---");
+            }
         }
     }
 

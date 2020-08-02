@@ -268,10 +268,35 @@ public class UdpClient extends PduUtil implements Runnable {
                             "&header:" + buffer.getInt(0) +
                             "&length:" + buffer.getInt(PduBase.PDU_BODY_LENGTH_INDEX));
 
-                    InetAddress ipAddress = InetAddress.getByName(mAddress);
-                    DatagramPacket sendPacket = new DatagramPacket(buffer.array(), buffer.remaining(), ipAddress, port);
-                    udpSocket.send(sendPacket);
-                    Log.e("colin", "colin start time06 --- tv Encoder data send finish by socket");
+                    int limit = 65507;//The limit on a UDP datagram payload in IPv4 is 65535-28=65507 bytes
+                    int totalLen = buffer.remaining(); //帧数据总长度
+
+                    if (totalLen > limit) {
+                        byte[] src = buffer.array();
+                        int count = totalLen / limit + 1;
+                        for (int i = 0; i < count; i++) {
+                            int offset = i * limit;
+                            int length;
+                            if (i < count - 1) {
+                                length = limit;
+                            } else {
+                                length = totalLen - (i * limit);
+                            }
+                            byte[] dst = new byte[length];
+                            System.arraycopy(src, offset, dst, 0, length);
+
+                            InetAddress ipAddress = InetAddress.getByName(mAddress);
+                            DatagramPacket sendPacket = new DatagramPacket(dst, dst.length, ipAddress, port);
+                            udpSocket.send(sendPacket);
+                            Log.e("colin", "colin start time06 --- tv Encoder data peer send finish by udp socket");
+                        }
+
+                    } else {
+                        InetAddress ipAddress = InetAddress.getByName(mAddress);
+                        DatagramPacket sendPacket = new DatagramPacket(buffer.array(), buffer.remaining(), ipAddress, port);
+                        udpSocket.send(sendPacket);
+                        Log.e("colin", "colin start time06 --- tv Encoder data send finish by udp socket");
+                    }
                 } catch (IOException e) {
                     e.printStackTrace();
                     Log.e(TAG, "udp send error---" + e.getMessage());
