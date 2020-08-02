@@ -28,6 +28,11 @@
         <activity android:name=".UdpServerActivity" />
         <activity android:name=".UdpClientActivity" />
 
+        <activity android:name=".CommandRequestActivity" />
+        <activity android:name=".CommandResponseActivity" />
+        <activity android:name=".StreamSourceActivity" />
+        <activity android:name=".StreamSinkActivity" />
+
     </application>
 
     <uses-permission android:name="android.permission.INTERNET" />
