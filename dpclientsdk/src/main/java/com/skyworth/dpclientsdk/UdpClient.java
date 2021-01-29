@@ -1,6 +1,8 @@
 package com.skyworth.dpclientsdk;
 
 import android.media.MediaCodec;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import java.io.IOException;
@@ -19,34 +21,72 @@ public class UdpClient extends PduUtil implements Runnable {
 
     private String mAddress;
     private int port;
-    private StreamSourceCallback mStreamSourceCallback;
+    private StreamSourceCallback mCallback;
+    private Handler mHandler;
 
     private DatagramSocket udpSocket;
+
+    /**
+     * socket网络发送线程对象
+     **/
     private UdpSendThread mSender;
+
 
     /**
      * 发送队列
      */
     private final LinkedBlockingQueue<ByteBuffer> mSendQueue;
 
-
-    /**
-     * 发送队列
-     */
-
     public UdpClient(String address, int port, StreamSourceCallback callback) {
         Log.d(TAG, "Create udpClient Task---");
         this.mAddress = address;
         this.port = port;
-        mStreamSourceCallback = callback;
+        mCallback = callback;
+        mHandler = new Handler(Looper.getMainLooper());
         mSendQueue = new LinkedBlockingQueue<>();
     }
 
-
     public void open() {
+        Log.d(TAG, "udpClient Connect to---" + mAddress + ":" + port);
         new Thread(this, "udpClient-thread").start();
     }
 
+    @Override
+    public void OnRec(final PduBase pduBase) {
+        if (mCallback != null) {
+            mHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (pduBase.pduType == PduBase.LOCAL_BYTES) {
+                        byte[] bytes = pduBase.body;
+                        Log.d(TAG, "udpClient local OnRec bytes:" + HexUtil.bytes2HexString(bytes));
+                        mCallback.onData(bytes);
+                    } else if (pduBase.pduType == PduBase.LOCAL_STRING) {
+                        String data = new String(pduBase.body);
+                        Log.d(TAG, "udpClient local OnRec string:" + data);
+                        mCallback.onData(data);
+                    } else if (pduBase.pduType == PduBase.VIDEO_FRAME) {
+                        //do nothing
+                    } else if (pduBase.pduType == PduBase.AUDIO_FRAME) {
+                        //do nothing
+                    } else if (pduBase.pduType == PduBase.PING_MSG) {
+                        String msg = new String(pduBase.body);
+                        Log.d(TAG, "udpClient OnRec ping msg:" + msg);
+                        mCallback.ping(msg);
+                    } else if (pduBase.pduType == PduBase.PONG_MSG) {
+                        String msg = new String(pduBase.body);
+                        Log.d(TAG, "udpClient OnRec pong msg:" + msg);
+                        mCallback.pong(msg);
+                    }
+                }
+            });
+        }
+    }
+
+    @Override
+    public void OnRec(PduBase pduBase, SocketChannel channel) {
+        //for socket server
+    }
 
     /**
      * 发送视频或音频帧
@@ -71,7 +111,7 @@ public class UdpClient extends PduUtil implements Runnable {
         byteBuffer.putInt(length);
         byteBuffer.put(buffer);
 
-        mSender.send(byteBuffer);
+        sendByteBuffer(byteBuffer);
     }
 
 
@@ -87,7 +127,7 @@ public class UdpClient extends PduUtil implements Runnable {
         byteBuffer.clear();
 
         PduBase pduBase = new PduBase();
-        pduBase.pduType = PDU_BYTES;
+        pduBase.pduType = PduBase.LOCAL_BYTES;
         pduBase.length = data.length;
         pduBase.body = data;
 
@@ -101,9 +141,8 @@ public class UdpClient extends PduUtil implements Runnable {
         byteBuffer.putInt(pduBase.length);
         byteBuffer.put(pduBase.body);
 
-        mSender.send(byteBuffer);
+        sendByteBuffer(byteBuffer);
     }
-
 
     /**
      * 发送local channel data
@@ -118,7 +157,7 @@ public class UdpClient extends PduUtil implements Runnable {
         byteBuffer.clear();
 
         PduBase pduBase = new PduBase();
-        pduBase.pduType = PDU_STRING;
+        pduBase.pduType = PduBase.LOCAL_STRING;
         pduBase.length = bytes.length;
         pduBase.body = bytes;
 
@@ -132,19 +171,21 @@ public class UdpClient extends PduUtil implements Runnable {
         byteBuffer.putInt(pduBase.length);
         byteBuffer.put(pduBase.body);
 
-        mSender.send(byteBuffer);
+        sendByteBuffer(byteBuffer);
 
     }
 
-    @Override
-    public void OnRec(PduBase pduBase) {
 
+    private void sendByteBuffer(ByteBuffer byteBuffer) {
+        synchronized (this) {
+            if (mSender != null && isOpen()) {
+                mSender.send(byteBuffer);
+            } else {
+                mCallback.onConnectState(ConnectState.ERROR);
+            }
+        }
     }
 
-    @Override
-    public void OnRec(PduBase pduBase, SocketChannel channel) {
-
-    }
 
     @Override
     public void run() {
@@ -155,8 +196,8 @@ public class UdpClient extends PduUtil implements Runnable {
         } catch (Exception e) {
             e.printStackTrace();
             Log.e(TAG, "udpClient failed on  " + mAddress + ":" + port + "  " + e.getMessage());
-            if (mStreamSourceCallback != null) {
-                mStreamSourceCallback.onConnectState(ConnectState.ERROR);
+            if (mCallback != null) {
+                mCallback.onConnectState(ConnectState.ERROR);
             }
         }
 
@@ -180,19 +221,44 @@ public class UdpClient extends PduUtil implements Runnable {
             mSender = new UdpSendThread();
             mSender.start();
 
-            if (mStreamSourceCallback != null) {
-                mStreamSourceCallback.onConnectState(ConnectState.CONNECT);
+            if (mCallback != null) {
+                mCallback.onConnectState(ConnectState.CONNECT);
             }
 
         } else {
             Log.e(TAG, "connect udp socket failed on port :" + port);
-            if (mStreamSourceCallback != null) {
-                mStreamSourceCallback.onConnectState(ConnectState.ERROR);
+            if (mCallback != null) {
+                mCallback.onConnectState(ConnectState.ERROR);
             }
         }
 
     }
 
+
+    /**
+     * 关闭socket
+     */
+    public void close() {
+        if (udpSocket != null) {
+            udpSocket.close();
+            udpSocket = null;
+        }
+        if (mSender != null) {
+            mSender.close();
+        }
+
+        mSendQueue.clear();
+    }
+
+
+    /**
+     * Socket连接是否是正常的
+     *
+     * @return 是否连接
+     */
+    public boolean isOpen() {
+        return udpSocket != null && udpSocket.isConnected();
+    }
 
     /**
      * socket receive
@@ -214,31 +280,11 @@ public class UdpClient extends PduUtil implements Runnable {
 
 
     /**
-     * 关闭socket
-     */
-    public void close() {
-        if (udpSocket != null) {
-            udpSocket.close();
-            udpSocket = null;
-        }
-        mSendQueue.clear();
-    }
-
-
-    /**
-     * Socket连接是否是正常的
-     *
-     * @return 是否连接
-     */
-    public boolean isOpen() {
-        return udpSocket != null && udpSocket.isConnected();
-    }
-
-
-    /**
      * socket 发送线程类
      */
     private class UdpSendThread implements Runnable {
+        boolean isExit = false;  //是否退出
+
         /**
          * 发送线程开启
          */
@@ -250,64 +296,99 @@ public class UdpClient extends PduUtil implements Runnable {
 
         public void send(ByteBuffer buffer) {
             synchronized (this) {
-                mSendQueue.offer(buffer);
+                if (buffer != null) {
+                    mSendQueue.offer(buffer);
+                    notify();
+                }
             }
 
         }
 
 
+        /**
+         * 发送线程关闭
+         */
+        public void close() {
+            synchronized (this) { // 激活线程
+                isExit = true;
+                notify();
+            }
+        }
+
         @Override
         public void run() {
-            Log.v(TAG, "udpSend-thread send loop is running");
-            while (udpSocket != null && udpSocket.isConnected()) {
-                try {
-                    ByteBuffer buffer = mSendQueue.take();
-                    buffer.flip();
+            while (!isExit) {
 
-                    Log.v(TAG, "tcp will send buffer to:" + mAddress + ":" + port +
-                            "&header:" + buffer.getInt(0) +
-                            "&length:" + buffer.getInt(PduBase.PDU_BODY_LENGTH_INDEX));
+                Log.v(TAG, "udpSend-thread send loop is running");
 
-                    int limit = 65507;//The limit on a UDP datagram payload in IPv4 is 65535-28=65507 bytes
-                    int totalLen = buffer.remaining(); //帧数据总长度
+                synchronized (mSendQueue) {
+                    while (!mSendQueue.isEmpty()
+                            && udpSocket != null
+                            && udpSocket.isConnected()) {
 
-                    if (totalLen > limit) {
-                        byte[] src = buffer.array();
-                        int count = totalLen / limit + 1;
-                        for (int i = 0; i < count; i++) {
-                            int offset = i * limit;
-                            int length;
-                            if (i < count - 1) {
-                                length = limit;
-                            } else {
-                                length = totalLen - (i * limit);
-                            }
-                            byte[] dst = new byte[length];
-                            System.arraycopy(src, offset, dst, 0, length);
-
-                            InetAddress ipAddress = InetAddress.getByName(mAddress);
-                            DatagramPacket sendPacket = new DatagramPacket(dst, dst.length, ipAddress, port);
-                            udpSocket.send(sendPacket);
-                            Log.e("colin", "colin start time06 --- tv Encoder data peer send finish by udp socket");
+                        ByteBuffer buffer = mSendQueue.poll();
+                        if (buffer == null) {
+                            continue;
                         }
+                        buffer.flip();
 
-                    } else {
-                        InetAddress ipAddress = InetAddress.getByName(mAddress);
-                        DatagramPacket sendPacket = new DatagramPacket(buffer.array(), buffer.remaining(), ipAddress, port);
-                        udpSocket.send(sendPacket);
-                        Log.e("colin", "colin start time06 --- tv Encoder data send finish by udp socket");
+                        Log.v(TAG, "udp will send buffer to:" + mAddress + ":" + port +
+                                "&header:" + buffer.getInt(0) +
+                                "&length:" + buffer.getInt(PduBase.PDU_BODY_LENGTH_INDEX) +
+                                "&mSendQueue size:" + mSendQueue.size());
+
+                        int limit = 65507;//The limit on a UDP datagram payload in IPv4 is 65535-28=65507 bytes
+                        int totalLen = buffer.remaining(); //帧数据总长度
+                        try {
+                            if (totalLen > limit) {
+                                byte[] src = buffer.array();
+                                int count = totalLen / limit + 1;
+                                for (int i = 0; i < count; i++) {
+                                    int offset = i * limit;
+                                    int length;
+                                    if (i < count - 1) {
+                                        length = limit;
+                                    } else {
+                                        length = totalLen - (i * limit);
+                                    }
+                                    byte[] dst = new byte[length];
+                                    System.arraycopy(src, offset, dst, 0, length);
+
+                                    InetAddress ipAddress = InetAddress.getByName(mAddress);
+                                    DatagramPacket sendPacket = new DatagramPacket(dst, dst.length, ipAddress, port);
+                                    udpSocket.send(sendPacket);
+                                    Log.e("colin", "colin start time06 --- tv Encoder data peer send finish by udp socket");
+                                }
+
+                            } else {
+                                InetAddress ipAddress = InetAddress.getByName(mAddress);
+                                DatagramPacket sendPacket = new DatagramPacket(buffer.array(), buffer.remaining(), ipAddress, port);
+                                udpSocket.send(sendPacket);
+                                Log.e("colin", "colin start time06 --- tv Encoder data send finish by udp socket");
+                            }
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                            Log.e(TAG, "udp send error---" + e.getMessage());
+                            if (mCallback != null) {
+                                mCallback.onConnectState(ConnectState.ERROR);
+                            }
+                        }
+                    }//#while
+                }
+
+                synchronized (this) {
+                    try {
+                        wait();// 发送完消息后，线程进入等待状态
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                        Log.e(TAG, "udp mSendQueue error---" + e.getMessage());
                     }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    Log.e(TAG, "udp send error---" + e.getMessage());
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                    Log.e(TAG, "udp SendQueue take error---" + e.getMessage());
                 }
             }
-            Log.e(TAG, "udpSend-thread exit---");
+
+            Log.e(TAG, "udpSend-thread is exit---");
+
         }//#run
 
     }//# UdpSendThread
-
 }

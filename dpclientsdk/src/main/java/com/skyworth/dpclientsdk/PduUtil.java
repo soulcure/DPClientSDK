@@ -10,19 +10,42 @@ public abstract class PduUtil {
 
     private static final String TAG = PduUtil.class.getSimpleName();
 
-    public static final byte PDU_BYTES = 0x00;
-    public static final byte PDU_STRING = 0x01;
-    public static final byte PDU_VIDEO = 0x02;
-    public static final byte PDU_AUDIO = 0x03;
-    public static final byte PDU_PING = 0x0E;
-    public static final byte PDU_PONG = 0x0F;
 
-
+    /**
+     * socket client接收数据回调
+     *
+     * @param pduBase
+     */
     public abstract void OnRec(PduBase pduBase);
 
+
+    /**
+     * socket client解析包
+     *
+     * @param buffer
+     * @return
+     */
+    public int parsePdu(ByteBuffer buffer) {
+        return parsePdu(buffer, null);
+    }
+
+
+    /**
+     * socket server接收数据回调
+     *
+     * @param pduBase
+     * @param channel
+     */
     public abstract void OnRec(PduBase pduBase, SocketChannel channel);
 
 
+    /**
+     * socket server端解析包
+     *
+     * @param buffer
+     * @param channel
+     * @return
+     */
     public int parsePdu(ByteBuffer buffer, SocketChannel channel) {
 
         if (buffer.limit() > PduBase.PDU_BASIC_LENGTH) {
@@ -45,12 +68,16 @@ public abstract class PduUtil {
             int bodyLength = buffer.getInt(PduBase.PDU_BODY_LENGTH_INDEX);
             int totalLength = bodyLength + PduBase.PDU_HEADER_LENGTH;
 
-            if (totalLength <= buffer.limit()) {
+            if (totalLength < buffer.limit()) {
                 //has a full pack.
                 byte[] packByte = new byte[totalLength];
                 buffer.get(packByte);
                 PduBase pduBase = buildPdu(packByte);
-                OnRec(pduBase, channel);
+                if (channel == null) {
+                    OnRec(pduBase);
+                } else {
+                    OnRec(pduBase, channel);
+                }
                 buffer.compact();
                 //read to read.
                 buffer.flip();
@@ -58,54 +85,23 @@ public abstract class PduUtil {
                 Log.v(TAG, "pdu read is totalLength:" + totalLength);
                 return totalLength;
 
-            } else {
-                buffer.position(buffer.limit());
-                buffer.limit(buffer.capacity());
-                return 0;
-            }
-
-        } else {
-            Log.v(TAG, " not a full header");
-            buffer.position(buffer.limit());
-            buffer.limit(buffer.capacity());
-            return -2;
-        }
-    }
-
-    public int parsePdu(ByteBuffer buffer) {
-        if (buffer.limit() > PduBase.PDU_BASIC_LENGTH) {
-            int begin = buffer.getInt(0);
-            Log.v(TAG, "pdu begin is " + begin);
-            if (begin != PduBase.pduStartFlag) {
-                Log.e(TAG, "pdu header error buffer limit:" + buffer.limit());
+            } else if (totalLength == buffer.limit()) {
+                //has a full pack.
+                byte[] packByte = new byte[totalLength];
+                buffer.get(packByte);
+                PduBase pduBase = buildPdu(packByte);
+                if (channel == null) {
+                    OnRec(pduBase);
+                } else {
+                    OnRec(pduBase, channel);
+                }
+                buffer.compact();
+                //read to write.
                 buffer.clear();
-                return -1;
-            }
-        } else {    //did not contain a start flag yet.continue read.
-            Log.v(TAG, "did not has full start flag");
-            buffer.position(buffer.limit());
-            buffer.limit(buffer.capacity());
-            return 0;
-        }
-
-        if (buffer.limit() >= PduBase.PDU_HEADER_LENGTH) {
-            //has full header
-            int bodyLength = buffer.getInt(PduBase.PDU_BODY_LENGTH_INDEX);
-            int totalLength = bodyLength + PduBase.PDU_HEADER_LENGTH;
-
-            if (totalLength <= buffer.limit()) {
-                //has a full pack.
-                byte[] packByte = new byte[totalLength];
-                buffer.get(packByte);
-                PduBase pduBase = buildPdu(packByte);
-                OnRec(pduBase);
-                buffer.compact();
-                //read to read.
-                buffer.flip();
 
                 Log.v(TAG, "pdu read is totalLength:" + totalLength);
-                return totalLength;
 
+                return 0;
             } else {
                 buffer.position(buffer.limit());
                 buffer.limit(buffer.capacity());

@@ -60,6 +60,6 @@
 
 -keep public class com.skyworth.dpclientsdk.WebSocketClient {*;}
 
--keep public class com.skyworth.dpclientsdk.StreamChannelSource {*;}
+-keep public class com.skyworth.dpclientsdk.TcpClient {*;}
 
--keep public class com.skyworth.dpclientsdk.StreamChannelSink {*;}
+-keep public class com.skyworth.dpclientsdk.TcpServer {*;}

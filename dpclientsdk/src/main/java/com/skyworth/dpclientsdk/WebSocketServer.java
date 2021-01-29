@@ -43,7 +43,10 @@ public class WebSocketServer {
                     webSocket.setClosedCallback(new CompletedCallback() {
                         @Override
                         public void onCompleted(Exception ex) {
-                            Log.d(TAG, "Close:" + socketIndex);
+                            if (ex != null) {
+                                ex.printStackTrace();
+                            }
+                            Log.e(TAG, "webSocket Close:" + socketIndex);
                             freeSocket(socketIndex);
                         }
                     });
@@ -51,7 +54,10 @@ public class WebSocketServer {
                     webSocket.setEndCallback(new CompletedCallback() {
                         @Override
                         public void onCompleted(Exception ex) {
-                            Log.d(TAG, "End:" + webSocket);
+                            if (ex != null) {
+                                ex.printStackTrace();
+                            }
+                            Log.e(TAG, "webSocket End:" + webSocket);
                             freeSocket(socketIndex);
                         }
                     });
@@ -212,7 +218,6 @@ public class WebSocketServer {
     }
 
 
-
     public void pong(int socketId, String data) {
         for (SocketPool connection : mConnects) {
             if (connection.socketId == socketId && connection.webSocket != null) {
@@ -221,7 +226,6 @@ public class WebSocketServer {
             }
         }
     }
-
 
 
     private int addSocket(final WebSocket webSocket) {

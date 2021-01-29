@@ -2,6 +2,14 @@ package com.skyworth.dpclientsdk;
 
 public class PduBase {
 
+    public static final byte LOCAL_BYTES = 0x00;
+    public static final byte LOCAL_STRING = 0x01;
+    public static final byte VIDEO_FRAME = 0x02;
+    public static final byte AUDIO_FRAME = 0x03;
+    public static final byte PING_MSG = 0x0E;
+    public static final byte PONG_MSG = 0x0F;
+
+
     /****************************************************
      * basic unit of data type length
      */
@@ -23,7 +31,7 @@ public class PduBase {
 
     /****************************************************
      * index 1. pos:[4-5)
-     * 0 local channel data; 1 video frame ; 2 audio frame
+     * 0 local channel data; 1 video frame ; 2 audio frame ;3 ping message ;4 pong message
      */
     public byte pduType;
 
